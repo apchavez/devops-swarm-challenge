@@ -8,16 +8,16 @@ $Image = "ghcr.io/apchavez/devops-swarm-challenge:latest"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 
 function Wait-ForDocker {
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
         docker info *> $null
         if ($LASTEXITCODE -eq 0) { return $true }
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 10
     }
     return $false
 }
 
 if (-not (Wait-ForDocker)) {
-    Write-Error "Docker daemon not reachable after 150s, aborting."
+    Write-Error "Docker daemon not reachable after 600s, aborting."
     exit 1
 }
 
