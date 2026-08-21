@@ -37,4 +37,19 @@ foreach ($stackEnv in @("dev", "sit", "qa")) {
     docker stack deploy -c "$RepoRoot\stack\base.yml" -c "$RepoRoot\stack\$stackEnv.yml" --with-registry-auth "devops-swarm-challenge-$stackEnv"
 }
 
+# After a Docker Desktop stop/restart, Swarm can come back "active" with the
+# right desired replica count but never reschedule replacement tasks on its
+# own (observed 2026-08-21). Give reconciliation a moment, then force any
+# service still short of its desired count.
+Start-Sleep -Seconds 15
+
+foreach ($stackEnv in @("dev", "sit", "qa")) {
+    $serviceName = "devops-swarm-challenge-${stackEnv}_app"
+    $replicas = (docker service ls --filter "name=$serviceName" --format '{{.Replicas}}').Trim()
+    if ($replicas -match '^(\d+)/(\d+)$' -and [int]$Matches[1] -lt [int]$Matches[2]) {
+        Write-Output "$serviceName stuck at $replicas - forcing reschedule..."
+        docker service update --force $serviceName --detach=false
+    }
+}
+
 Write-Output "Recovery complete."
