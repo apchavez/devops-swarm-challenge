@@ -2,7 +2,10 @@ name: CI
 
 # Mirrors the "Cloud" half of reto.png: Build Code -> Unit Test -> Code analysis
 # -> GitHub Advanced Security (see codeql.yml) -> Fluid Attacks (Semgrep SAST here,
-# documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory.
+# documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory
+# (also substituted - see README: JFrog's trial rejects personal-email signups,
+# so this uses GitHub Container Registry instead, same "push the image to a
+# registry" step with zero external account needed).
 
 on:
   push:
@@ -87,25 +90,29 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  publish-artifactory:
-    name: Build image + push to JFrog Artifactory
+  publish-ghcr:
+    name: Build image + push to GitHub Container Registry
     needs: [build-test, quality-gate-sonar, fluid-attacks-equivalent]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.JF_URL != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup JFrog CLI
-        uses: jfrog/setup-jfrog-cli@v4
-        env:
-          JF_URL: ${{ vars.JF_URL }}
-          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Docker image
-        run: docker build -t ${{ vars.JF_DOCKER_REPO }}/devops-swarm-challenge:${{ github.sha }} .
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }} -t ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest .
 
-      - name: Push image to Artifactory
+      - name: Push image to GHCR
         run: |
-          jf docker push ${{ vars.JF_DOCKER_REPO }}/devops-swarm-challenge:${{ github.sha }}
-          jf rt build-publish devops-swarm-challenge ${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest

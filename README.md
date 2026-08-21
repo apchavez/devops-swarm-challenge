@@ -30,8 +30,8 @@ Onpremise:
 | GitHub Advanced Security | `.github/workflows/codeql.yml` (CodeQL). **Limitación real encontrada:** GHAS (code scanning + secret scanning) es gratis en repos públicos pero requiere plan pago en repos **privados** de cuentas personales — confirmado con `gh api .../code-scanning/alerts` (403) y un intento de habilitar secret scanning por API (422 "Secret scanning is not available for this repository"). El workflow corre CodeQL igual (`continue-on-error: true` en el upload de SARIF) para demostrar el paso; en Interbank con licencia GHAS esto subiría los hallazgos al tab Security normalmente. |
 | **Fluid Attacks** | Sustituido por **Semgrep** (SAST) como equivalente open-source — Fluid Attacks es un producto comercial de pentesting/SAST-as-a-service; Semgrep cubre la misma categoría de control (análisis estático de seguridad en el pipeline) sin requerir licencia. Documentado aquí para no fingir una herramienta que no usé. |
 | Quality Gate Sonar | job `quality-gate-sonar` en `ci.yml`, SonarCloud (mismo motor que SonarQube, hosteado) |
-| JFrog Artifactory | job `publish-artifactory` en `ci.yml`, usa `jfrog/setup-jfrog-cli` contra una cuenta free-tier real de JFrog Cloud |
-| GitHub Secret | GitHub Actions Secrets/Variables del repo (`SONAR_TOKEN`, `JF_ACCESS_TOKEN`, etc.) |
+| **JFrog Artifactory** | Sustituido por **GitHub Container Registry** (`ghcr.io`) — job `publish-ghcr` en `ci.yml`. **Limitación real encontrada:** el trial de 14 días de JFrog (ya no existe un free-tier permanente, solo Pro pago o trial) rechazó el signup con Gmail personal ("Please use a different company email" — exige correo corporativo/de dominio propio). En vez de fingir la cuenta con un dominio falso, se documenta la limitación y se usa GHCR, que cubre el mismo concepto ("subir la imagen a un registry") sin cuenta externa ni tarjeta. En Interbank, con correo corporativo, JFrog real sí sería viable. |
+| GitHub Secret | GitHub Actions Secrets del repo (`SONAR_TOKEN`); GHCR usa el `GITHUB_TOKEN` automático, sin secreto adicional |
 | Approve (developer) | GitHub Environments (`dev`, `sit`, `qa`) creados como destino de deploy. **Limitación real encontrada:** GitHub Free en repos privados no permite la protection rule "required reviewers" (HTTP 422, "Please ensure the billing plan supports the required reviewers protection rule" — es feature de plan pago/Team-Enterprise para repos privados, gratis solo en repos públicos). El gate de aprobación queda entonces implementado con `workflow_dispatch` manual (alguien dispara el deploy a mano) en vez de un botón "Review deployments" automático. En Interbank, con plan de organización, sí se configuraría el required-reviewer real. |
 | Self-hosted runner | runner registrado en esta misma máquina con la etiqueta `onprem` (ver sección abajo) |
 | DMGR1 / DMGR2 | **Docker Swarm** local (`docker swarm init`) — en esta simulación un solo nodo hace de manager, pero el patrón de `docker stack deploy` es el mismo que en un swarm multi-nodo real. En Interbank esto sería infraestructura real con nodos separados. |
@@ -44,7 +44,7 @@ app/            FastAPI hola-mundo
 tests/          pytest
 stack/          docker-compose/stack files para Swarm (base + dev/sit/qa) + script de deploy
 .github/workflows/
-  ci.yml        Build -> Test -> Lint -> Semgrep -> Sonar -> push a Artifactory
+  ci.yml        Build -> Test -> Lint -> Semgrep -> Sonar -> push a ghcr.io
   codeql.yml    GitHub Advanced Security
   deploy.yml    Self-hosted runner: DEV -> SIT -> QA con aprobación manual por ambiente
 Dockerfile
@@ -66,12 +66,8 @@ IMAGE=devops-swarm-challenge:local ./stack/deploy.sh dev
 curl http://localhost:8081/hello
 ```
 
-## Pendiente: activar JFrog Artifactory
-
-Ver [`docs/jfrog-setup.md`](docs/jfrog-setup.md) — requiere crear una cuenta free-tier real de JFrog Cloud (verificación de correo, no automatizable) y configurar `JF_URL`/`JF_DOCKER_REPO`/`JF_ACCESS_TOKEN` como variables/secrets del repo. Hasta entonces, `ci.yml` omite el job `publish-artifactory` y `deploy.yml` construye la imagen localmente en el runner self-hosted.
-
 ## Qué NO es este repo
 
 - No es una demo de arquitectura de aplicación — el "hola mundo" es deliberado, el foco es el pipeline.
-- No reemplaza Fluid Attacks real ni JFrog Artifactory self-hosted — usa un equivalente OSS (Semgrep) y una cuenta free-tier real de JFrog respectivamente, documentado explícitamente arriba para no sobrerrepresentar experiencia con la herramienta comercial exacta.
+- No reemplaza Fluid Attacks ni JFrog Artifactory reales — usa equivalentes OSS/gratuitos (Semgrep y GitHub Container Registry respectivamente), documentado explícitamente arriba para no sobrerrepresentar experiencia con las herramientas comerciales exactas. Ambas sustituciones fueron forzadas por limitaciones reales encontradas al intentar usar las originales (ver tabla arriba), no por preferencia.
 - El Swarm es de un solo nodo simulando DMGR1/DMGR2 en esta misma máquina; en un entorno real habría nodos físicos/VMs separados.

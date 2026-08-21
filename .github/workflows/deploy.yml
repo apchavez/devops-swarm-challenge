@@ -14,23 +14,28 @@ on:
         required: false
 
 env:
-  # Falls back to a locally-built image when JFrog isn't wired up yet (see README) -
-  # stack/deploy.sh itself defaults IMAGE to devops-swarm-challenge:local when unset.
-  IMAGE: ${{ vars.JF_DOCKER_REPO != '' && format('{0}/devops-swarm-challenge:{1}', vars.JF_DOCKER_REPO, github.event.inputs.image_tag || github.sha) || '' }}
+  IMAGE: ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.event.inputs.image_tag || 'latest' }}
 
 jobs:
   deploy-dev:
     name: Deploy to DEV
     runs-on: [self-hosted, onprem]
     environment: dev
+    permissions:
+      contents: read
+      packages: read
     defaults:
       run:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
-      - name: Build image locally (no Artifactory configured yet)
-        if: vars.JF_DOCKER_REPO == ''
-        run: docker build -t devops-swarm-challenge:local .
+      - name: Log in to GHCR (self-hosted Docker daemon)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh dev
 
   deploy-sit:
@@ -43,6 +48,7 @@ jobs:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
+      - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh sit
 
   deploy-qa:
@@ -55,4 +61,5 @@ jobs:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
+      - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh qa
