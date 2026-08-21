@@ -1,0 +1,44 @@
+name: Deploy
+
+# Mirrors the "Onpremise" half of reto.png: a developer manually triggers this
+# (GitHub Free on a private repo doesn't support the "required reviewers"
+# environment protection rule - see README - so workflow_dispatch is the stand-in
+# approval gate). The self-hosted runner then promotes the image built by CI
+# through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to the latest commit on main)"
+        required: false
+
+env:
+  IMAGE: ${{ vars.JF_DOCKER_REPO }}/devops-swarm-challenge:${{ github.event.inputs.image_tag || github.sha }}
+
+jobs:
+  deploy-dev:
+    name: Deploy to DEV
+    runs-on: [self-hosted, onprem]
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./stack/deploy.sh dev
+
+  deploy-sit:
+    name: Deploy to SIT
+    needs: deploy-dev
+    runs-on: [self-hosted, onprem]
+    environment: sit
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./stack/deploy.sh sit
+
+  deploy-qa:
+    name: Deploy to QA
+    needs: deploy-sit
+    runs-on: [self-hosted, onprem]
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./stack/deploy.sh qa

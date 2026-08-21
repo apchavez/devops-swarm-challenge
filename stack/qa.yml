@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  app:
+    ports:
+      - "8083:8000"
+    deploy:
+      replicas: 2
+      labels:
+        - "env=qa"

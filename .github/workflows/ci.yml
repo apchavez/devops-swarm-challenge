@@ -1,0 +1,111 @@
+name: CI
+
+# Mirrors the "Cloud" half of reto.png: Build Code -> Unit Test -> Code analysis
+# -> GitHub Advanced Security (see codeql.yml) -> Fluid Attacks (Semgrep SAST here,
+# documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  build-test:
+    name: Build Code + Unit Test + Code analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint and format check (Code analysis)
+        run: |
+          ruff format --check .
+          ruff check .
+
+      - name: Run tests with coverage (Unit Test)
+        run: pytest
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: warn
+
+  fluid-attacks-equivalent:
+    name: Fluid Attacks equivalent (Semgrep SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Semgrep SAST scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: p/ci
+
+  quality-gate-sonar:
+    name: Quality Gate Sonar
+    needs: [build-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: pytest
+
+      - name: SonarCloud analysis
+        if: vars.SONAR_ORGANIZATION != '' && (github.event_name != 'pull_request' || github.actor != 'dependabot[bot]')
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  publish-artifactory:
+    name: Build image + push to JFrog Artifactory
+    needs: [build-test, quality-gate-sonar, fluid-attacks-equivalent]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.JF_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ vars.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t ${{ vars.JF_DOCKER_REPO }}/devops-swarm-challenge:${{ github.sha }} .
+
+      - name: Push image to Artifactory
+        run: |
+          jf docker push ${{ vars.JF_DOCKER_REPO }}/devops-swarm-challenge:${{ github.sha }}
+          jf rt build-publish devops-swarm-challenge ${{ github.sha }}
