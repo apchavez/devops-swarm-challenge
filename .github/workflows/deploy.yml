@@ -25,7 +25,7 @@ jobs:
     environment: dev
     defaults:
       run:
-        shell: 'C:\Program Files\Git\bin\bash.exe -e {0}'
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
       - name: Build image locally (no Artifactory configured yet)
@@ -40,7 +40,7 @@ jobs:
     environment: sit
     defaults:
       run:
-        shell: 'C:\Program Files\Git\bin\bash.exe -e {0}'
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
       - run: ./stack/deploy.sh sit
@@ -52,7 +52,7 @@ jobs:
     environment: qa
     defaults:
       run:
-        shell: 'C:\Program Files\Git\bin\bash.exe -e {0}'
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
       - run: ./stack/deploy.sh qa

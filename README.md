@@ -66,6 +66,10 @@ IMAGE=devops-swarm-challenge:local ./stack/deploy.sh dev
 curl http://localhost:8081/hello
 ```
 
+## Pendiente: activar JFrog Artifactory
+
+Ver [`docs/jfrog-setup.md`](docs/jfrog-setup.md) — requiere crear una cuenta free-tier real de JFrog Cloud (verificación de correo, no automatizable) y configurar `JF_URL`/`JF_DOCKER_REPO`/`JF_ACCESS_TOKEN` como variables/secrets del repo. Hasta entonces, `ci.yml` omite el job `publish-artifactory` y `deploy.yml` construye la imagen localmente en el runner self-hosted.
+
 ## Qué NO es este repo
 
 - No es una demo de arquitectura de aplicación — el "hola mundo" es deliberado, el foco es el pipeline.
