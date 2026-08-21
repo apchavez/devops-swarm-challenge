@@ -43,11 +43,20 @@ jobs:
     needs: deploy-dev
     runs-on: [self-hosted, onprem]
     environment: sit
+    permissions:
+      contents: read
+      packages: read
     defaults:
       run:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
+      - name: Log in to GHCR (self-hosted Docker daemon)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh sit
 
@@ -56,10 +65,19 @@ jobs:
     needs: deploy-sit
     runs-on: [self-hosted, onprem]
     environment: qa
+    permissions:
+      contents: read
+      packages: read
     defaults:
       run:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@v4
+      - name: Log in to GHCR (self-hosted Docker daemon)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh qa
