@@ -14,15 +14,23 @@ on:
         required: false
 
 env:
-  IMAGE: ${{ vars.JF_DOCKER_REPO }}/devops-swarm-challenge:${{ github.event.inputs.image_tag || github.sha }}
+  # Falls back to a locally-built image when JFrog isn't wired up yet (see README) -
+  # stack/deploy.sh itself defaults IMAGE to devops-swarm-challenge:local when unset.
+  IMAGE: ${{ vars.JF_DOCKER_REPO != '' && format('{0}/devops-swarm-challenge:{1}', vars.JF_DOCKER_REPO, github.event.inputs.image_tag || github.sha) || '' }}
 
 jobs:
   deploy-dev:
     name: Deploy to DEV
     runs-on: [self-hosted, onprem]
     environment: dev
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Build image locally (no Artifactory configured yet)
+        if: vars.JF_DOCKER_REPO == ''
+        run: docker build -t devops-swarm-challenge:local .
       - run: ./stack/deploy.sh dev
 
   deploy-sit:
@@ -30,6 +38,9 @@ jobs:
     needs: deploy-dev
     runs-on: [self-hosted, onprem]
     environment: sit
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: ./stack/deploy.sh sit
@@ -39,6 +50,9 @@ jobs:
     needs: deploy-sit
     runs-on: [self-hosted, onprem]
     environment: qa
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: ./stack/deploy.sh qa

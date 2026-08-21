@@ -1,6 +1,16 @@
 name: CodeQL
 
 # The "GitHub Advanced Security" box in reto.png.
+#
+# Known real limitation (confirmed 2026-08-21 via `gh api .../code-scanning/alerts`
+# -> 403 "Code scanning is not enabled for this repository" and a PATCH attempt to
+# enable secret_scanning -> 422 "Secret scanning is not available for this
+# repository"): GitHub Advanced Security features are free for PUBLIC repos but
+# require a paid plan for PRIVATE repos on personal accounts. Since this challenge
+# is deliberately private, the SARIF upload step fails - kept `continue-on-error`
+# so the workflow still demonstrates running CodeQL locally in CI. In an org with a
+# GHAS license (e.g. Interbank), this would upload findings to the Security tab
+# normally.
 
 on:
   push:
@@ -17,6 +27,7 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      actions: read
 
     steps:
       - name: Checkout repository
@@ -29,5 +40,6 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        continue-on-error: true
         with:
           category: "/language:python"

@@ -27,7 +27,7 @@ Onpremise:
 | Build Code | `.github/workflows/ci.yml` job `build-test` |
 | Unit Test (JUnit) | `pytest` (equivalente Python de JUnit) en `tests/` |
 | Code analysis | `ruff` (lint + format) en `ci.yml` |
-| GitHub Advanced Security | `.github/workflows/codeql.yml` (CodeQL) + secret scanning / push protection activados en la config del repo |
+| GitHub Advanced Security | `.github/workflows/codeql.yml` (CodeQL). **Limitación real encontrada:** GHAS (code scanning + secret scanning) es gratis en repos públicos pero requiere plan pago en repos **privados** de cuentas personales — confirmado con `gh api .../code-scanning/alerts` (403) y un intento de habilitar secret scanning por API (422 "Secret scanning is not available for this repository"). El workflow corre CodeQL igual (`continue-on-error: true` en el upload de SARIF) para demostrar el paso; en Interbank con licencia GHAS esto subiría los hallazgos al tab Security normalmente. |
 | **Fluid Attacks** | Sustituido por **Semgrep** (SAST) como equivalente open-source — Fluid Attacks es un producto comercial de pentesting/SAST-as-a-service; Semgrep cubre la misma categoría de control (análisis estático de seguridad en el pipeline) sin requerir licencia. Documentado aquí para no fingir una herramienta que no usé. |
 | Quality Gate Sonar | job `quality-gate-sonar` en `ci.yml`, SonarCloud (mismo motor que SonarQube, hosteado) |
 | JFrog Artifactory | job `publish-artifactory` en `ci.yml`, usa `jfrog/setup-jfrog-cli` contra una cuenta free-tier real de JFrog Cloud |
