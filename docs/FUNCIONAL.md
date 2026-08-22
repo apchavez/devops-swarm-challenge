@@ -40,7 +40,12 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
    `stack/deploy.sh <ambiente>`, que llama a `docker stack deploy` combinando
    `stack/base.yml` (config común) con el override del ambiente
    (`stack/dev.yml`, `sit.yml` o `qa.yml`).
-8. La app queda corriendo en Docker Swarm, expuesta en un puerto distinto
+8. Inmediatamente después de cada `docker stack deploy`, el job corre un
+   **smoke test**: reintenta `curl http://localhost:<puerto>/health` hasta
+   por 60 segundos. Si el servicio no responde a tiempo, el job falla ahí
+   mismo — no avanza al siguiente ambiente con una imagen rota, y no depende
+   de que alguien lo note revisando manualmente.
+9. La app queda corriendo en Docker Swarm, expuesta en un puerto distinto
    por ambiente (8081 dev, 8082 sit, 8083 qa), verificable con
    `curl http://localhost:<puerto>/health`.
 ```

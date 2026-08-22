@@ -39,12 +39,16 @@ flowchart TB
     subgraph ONPREM["🏠 Onpremise (misma máquina, runner label: onprem)"]
         RUNNER["🖥️ Self-hosted runner"]
         SWARM["🐳 Docker Swarm\n(1 nodo simula DMGR1/DMGR2)"]
-        RUNNER --> SWARM
+        RUNNER --> G1{{"✋ approval\nenvironment dev"}}
+        G1 --> SWARM
         SWARM --> S_DEV["stack DEV\npuerto 8081, 1 réplica"]
-        S_DEV --> G1{{"✋ approval\nenvironment dev"}}
-        G1 --> S_SIT["stack SIT\npuerto 8082, 1 réplica"]
-        S_SIT --> G2{{"✋ approval\nenvironment sit"}}
-        G2 --> S_QA["stack QA\npuerto 8083, 2 réplicas"]
+        S_DEV --> SMOKE_DEV["🩺 smoke test\ncurl /health"]
+        SMOKE_DEV --> G2{{"✋ approval\nenvironment sit"}}
+        G2 --> S_SIT["stack SIT\npuerto 8082, 1 réplica"]
+        S_SIT --> SMOKE_SIT["🩺 smoke test\ncurl /health"]
+        SMOKE_SIT --> G3{{"✋ approval\nenvironment qa"}}
+        G3 --> S_QA["stack QA\npuerto 8083, 2 réplicas"]
+        S_QA --> SMOKE_QA["🩺 smoke test\ncurl /health"]
         RECOVER["recover-swarm.ps1\nScheduled Task at logon\nself-healing tras reboot"] -.-> SWARM
     end
 

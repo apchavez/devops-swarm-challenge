@@ -4,7 +4,9 @@ name: Deploy
 # and each environment (dev/sit/qa) has a required-reviewers protection rule
 # configured on GitHub, so the run pauses for real manual approval before
 # each stage. The self-hosted runner then promotes the image built by CI
-# through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
+# through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA. Each stage
+# ends with a smoke test against /health, so a broken image fails the job
+# right there instead of silently sitting unhealthy in Swarm.
 
 on:
   workflow_dispatch:
@@ -37,6 +39,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh dev
+      - name: Smoke test (/health)
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8081/health; then
+              echo "dev is healthy"
+              exit 0
+            fi
+            echo "Waiting for dev to become healthy... ($i/30)"
+            sleep 2
+          done
+          echo "dev did not become healthy in time" >&2
+          exit 1
 
   deploy-sit:
     name: Deploy to SIT
@@ -59,6 +73,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh sit
+      - name: Smoke test (/health)
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8082/health; then
+              echo "sit is healthy"
+              exit 0
+            fi
+            echo "Waiting for sit to become healthy... ($i/30)"
+            sleep 2
+          done
+          echo "sit did not become healthy in time" >&2
+          exit 1
 
   deploy-qa:
     name: Deploy to QA
@@ -81,3 +107,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh qa
+      - name: Smoke test (/health)
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8083/health; then
+              echo "qa is healthy"
+              exit 0
+            fi
+            echo "Waiting for qa to become healthy... ($i/30)"
+            sleep 2
+          done
+          echo "qa did not become healthy in time" >&2
+          exit 1
