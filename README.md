@@ -4,6 +4,12 @@ Reto **privado** de preparación para el puesto de **Desarrollador DevOps** (Cin
 
 El código funcional es intencionalmente trivial (un "hola mundo" en FastAPI, `/health` y `/hello`). El objetivo de este repo **no es la aplicación**, es reproducir a escala reducida el flujo de trabajo real que me describieron en el proceso (ver `reto.png`), para entender cada pieza antes de encontrarla en un entorno real de Interbank.
 
+**Documentación para sustentar:**
+- [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md) — diagrama real (Mermaid) y diferencias frente a `reto.png`.
+- [`docs/FUNCIONAL.md`](docs/FUNCIONAL.md) — qué hace el pipeline de punta a punta y qué demuestra.
+- [`docs/PREREQUISITOS.md`](docs/PREREQUISITOS.md) — cuentas, secrets, Environments, branch protection y setup del runner necesarios para reproducirlo.
+- [`docs/DEMO.md`](docs/DEMO.md) — guion paso a paso para mostrarlo en vivo, con preguntas frecuentes anticipadas.
+
 ## El flujo objetivo (reto.png)
 
 ```
