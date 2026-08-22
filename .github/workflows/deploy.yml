@@ -4,11 +4,18 @@ name: Deploy
 # and each environment (dev/sit/qa) has a required-reviewers protection rule
 # configured on GitHub, so the run pauses for real manual approval before
 # each stage. The self-hosted runner then promotes the image built by CI
-# through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA. Each stage
-# ends with a smoke test against /health; if it doesn't come up healthy in
-# 60s, the job rolls the service back to its previous spec (docker service
-# rollback) before failing, instead of leaving a broken image running or
-# promoting it to the next environment.
+# through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
+#
+# Each stage verifies the rollout by polling `docker service inspect
+# --format .UpdateStatus.State` instead of just curling /health: with
+# update_config.order=start-first (see stack/base.yml), a bad new image
+# still leaves the old, healthy replica answering the published port during
+# the rollout, so a bare curl can report "healthy" even when the requested
+# image never came up (confirmed by deliberately deploying a broken image
+# on 2026-08-22 - see README). If Swarm's own failure_action=rollback
+# already reverted the service (state rollback_completed/rollback_paused),
+# the job fails immediately; if the rollout is simply stuck, the job forces
+# a rollback itself as a fallback before failing.
 
 on:
   workflow_dispatch:
@@ -41,18 +48,28 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh dev
-      - name: Smoke test (/health)
+      - name: Verify rollout (Swarm update status + /health)
         run: |
+          SERVICE=devops-swarm-challenge-dev_app
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8081/health; then
-              echo "dev is healthy"
-              exit 0
-            fi
-            echo "Waiting for dev to become healthy... ($i/30)"
+            STATE=$(docker service inspect "$SERVICE" --format '{{.UpdateStatus.State}}' 2>/dev/null || true)
+            case "$STATE" in
+              ""|completed)
+                if curl -sf http://localhost:8081/health; then
+                  echo "dev rollout completed and healthy"
+                  exit 0
+                fi
+                ;;
+              rollback_completed|rollback_paused|paused)
+                echo "dev rollout failed - Swarm already reports state: $STATE" >&2
+                exit 1
+                ;;
+            esac
+            echo "Waiting for dev rollout to settle... state='$STATE' ($i/30)"
             sleep 2
           done
-          echo "dev did not become healthy in time - rolling back" >&2
-          docker service rollback devops-swarm-challenge-dev_app --detach=false || echo "rollback failed or nothing to roll back to" >&2
+          echo "dev rollout did not settle in time (state='$STATE') - rolling back" >&2
+          docker service rollback "$SERVICE" --detach=false || echo "rollback failed or nothing to roll back to" >&2
           exit 1
 
   deploy-sit:
@@ -76,18 +93,28 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh sit
-      - name: Smoke test (/health)
+      - name: Verify rollout (Swarm update status + /health)
         run: |
+          SERVICE=devops-swarm-challenge-sit_app
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8082/health; then
-              echo "sit is healthy"
-              exit 0
-            fi
-            echo "Waiting for sit to become healthy... ($i/30)"
+            STATE=$(docker service inspect "$SERVICE" --format '{{.UpdateStatus.State}}' 2>/dev/null || true)
+            case "$STATE" in
+              ""|completed)
+                if curl -sf http://localhost:8082/health; then
+                  echo "sit rollout completed and healthy"
+                  exit 0
+                fi
+                ;;
+              rollback_completed|rollback_paused|paused)
+                echo "sit rollout failed - Swarm already reports state: $STATE" >&2
+                exit 1
+                ;;
+            esac
+            echo "Waiting for sit rollout to settle... state='$STATE' ($i/30)"
             sleep 2
           done
-          echo "sit did not become healthy in time - rolling back" >&2
-          docker service rollback devops-swarm-challenge-sit_app --detach=false || echo "rollback failed or nothing to roll back to" >&2
+          echo "sit rollout did not settle in time (state='$STATE') - rolling back" >&2
+          docker service rollback "$SERVICE" --detach=false || echo "rollback failed or nothing to roll back to" >&2
           exit 1
 
   deploy-qa:
@@ -111,16 +138,26 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh qa
-      - name: Smoke test (/health)
+      - name: Verify rollout (Swarm update status + /health)
         run: |
+          SERVICE=devops-swarm-challenge-qa_app
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8083/health; then
-              echo "qa is healthy"
-              exit 0
-            fi
-            echo "Waiting for qa to become healthy... ($i/30)"
+            STATE=$(docker service inspect "$SERVICE" --format '{{.UpdateStatus.State}}' 2>/dev/null || true)
+            case "$STATE" in
+              ""|completed)
+                if curl -sf http://localhost:8083/health; then
+                  echo "qa rollout completed and healthy"
+                  exit 0
+                fi
+                ;;
+              rollback_completed|rollback_paused|paused)
+                echo "qa rollout failed - Swarm already reports state: $STATE" >&2
+                exit 1
+                ;;
+            esac
+            echo "Waiting for qa rollout to settle... state='$STATE' ($i/30)"
             sleep 2
           done
-          echo "qa did not become healthy in time - rolling back" >&2
-          docker service rollback devops-swarm-challenge-qa_app --detach=false || echo "rollback failed or nothing to roll back to" >&2
+          echo "qa rollout did not settle in time (state='$STATE') - rolling back" >&2
+          docker service rollback "$SERVICE" --detach=false || echo "rollback failed or nothing to roll back to" >&2
           exit 1

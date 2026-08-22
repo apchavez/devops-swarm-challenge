@@ -58,7 +58,16 @@ curl http://localhost:8083/health   # qa
 curl http://localhost:8083/hello    # {"message": "Hola mundo"}
 ```
 
-## 6. Cierre — qué preguntas anticipar
+## 6. (Opcional, si hay tiempo) Mostrar el rollback en vivo
+
+Esta es la parte que más impresiona porque no es un feature "de manual" — se descubrió probándolo de verdad:
+
+1. Cuenta la historia: al implementar el smoke test, se probó a propósito desplegando una imagen rota (`broken-test`, sin servidor) a `dev`.
+2. El hallazgo real: Docker Swarm **ya hace rollback solo** (`failure_action: rollback` en `stack/base.yml`) — pero el smoke test inicial (`curl` simple) daba un **falso positivo**, porque con `order: start-first` la réplica vieja sigue sirviendo tráfico mientras la nueva intenta arrancar, así que el `curl` pegaba a la instancia vieja y el job de GitHub Actions marcaba "healthy" sin que la imagen nueva jamás funcionara.
+3. La corrección: el step ahora consulta `docker service inspect --format '{{.UpdateStatus.State}}'` — el estado real del rollout en Swarm — antes de confiar en el `curl`.
+4. Si quieres reproducirlo en vivo: construye una imagen con `CMD ["sleep", "9999"]`, súbela a `ghcr.io` con un tag de prueba, dispara `Deploy` con ese `image_tag`, aprueba `dev`, y muestra en la terminal `docker service ps devops-swarm-challenge-dev_app` mientras el job de Actions falla con el motivo correcto (`rollout failed - Swarm already reports state: rollback_completed`).
+
+## 7. Cierre — qué preguntas anticipar
 
 | Pregunta probable | Respuesta corta |
 |---|---|
@@ -66,3 +75,4 @@ curl http://localhost:8083/hello    # {"message": "Hola mundo"}
 | "¿Por qué un solo nodo Swarm y no DMGR1/DMGR2 reales?" | Es una simulación en una sola máquina; el comando `docker stack deploy` es el mismo que en un swarm multi-nodo real, documentado en `docs/ARQUITECTURA.md`. |
 | "¿Cómo se garantiza que nadie salte el gate de aprobación?" | `required_reviewers` es una regla de GitHub a nivel de Environment, no algo que el código pueda saltarse — solo se puede desactivar desde Settings con permisos de administrador del repo. |
 | "¿Qué pasa si el self-hosted runner se cae?" | `recover-swarm.ps1`, registrado como Scheduled Task, reinicializa el Swarm y vuelve a desplegar los 3 stacks al reiniciar la máquina. |
+| "¿Cómo sabes que el deploy realmente funcionó y no un falso positivo?" | Justo por eso el smoke test no es un `curl` simple — verifica `UpdateStatus.State` de Swarm primero, porque un `curl` ingenuo puede pegarle a la réplica vieja durante un rollout fallido (se descubrió probándolo con una imagen rota a propósito). |

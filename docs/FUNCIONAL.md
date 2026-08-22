@@ -40,13 +40,21 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
    `stack/deploy.sh <ambiente>`, que llama a `docker stack deploy` combinando
    `stack/base.yml` (config común) con el override del ambiente
    (`stack/dev.yml`, `sit.yml` o `qa.yml`).
-8. Inmediatamente después de cada `docker stack deploy`, el job corre un
-   **smoke test**: reintenta `curl http://localhost:<puerto>/health` hasta
-   por 60 segundos. Si el servicio no responde a tiempo, el job ejecuta
-   `docker service rollback` sobre ese ambiente (vuelve a la versión
-   anterior automáticamente) y **después** falla — no deja el ambiente en
-   un estado roto ni avanza al siguiente con una imagen que no funciona, y
-   no depende de que alguien lo note revisando manualmente.
+8. Inmediatamente después de cada `docker stack deploy`, el job verifica el
+   rollout consultando `docker service inspect --format
+   '{{.UpdateStatus.State}}'` (la fuente de verdad real de Swarm) y solo
+   confirma con `curl /health` cuando ese estado es `completed` o vacío. Si
+   Swarm ya detectó el fallo y reporta `rollback_completed`/`rollback_paused`
+   (porque `update_config.failure_action: rollback` en `stack/base.yml` ya
+   actuó), el job falla de inmediato con ese motivo. Si el rollout se queda
+   atascado sin que Swarm decida nada, el job fuerza `docker service
+   rollback` como red de seguridad antes de fallar. **Por qué no basta con
+   un `curl` simple:** con `update_config.order: start-first`, la réplica
+   vieja (sana) sigue respondiendo en el puerto público mientras la nueva
+   intenta arrancar — un `curl` ingenuo puede reportar "healthy" pegándole
+   a la instancia vieja aunque la imagen nueva nunca haya funcionado
+   (confirmado desplegando una imagen rota a propósito el 2026-08-22, ver
+   `README.md`).
 9. La app queda corriendo en Docker Swarm, expuesta en un puerto distinto
    por ambiente (8081 dev, 8082 sit, 8083 qa), verificable con
    `curl http://localhost:<puerto>/health`.
