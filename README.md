@@ -59,6 +59,10 @@ Al auditar el repo completo aparte del mapeo 1:1 con `reto.png`, se encontraron 
   
   Se corrigió el step (ahora `Verify rollout`) para que primero consulte `docker service inspect --format '{{.UpdateStatus.State}}'` — la fuente de verdad real de Swarm — y solo confirme con `curl /health` cuando el estado es `completed` o vacío. Si Swarm ya reporta `rollback_completed`/`rollback_paused`, el job falla de inmediato con ese motivo en vez de dar un falso "healthy". El `docker service rollback` manual queda como red de seguridad para el caso (menos común) de que el rollout se quede atascado sin que Swarm decida nada por su cuenta.
 
+## Retención de imágenes en GHCR
+
+Cada push a `main` sube una imagen nueva a `ghcr.io` con dos tags: el SHA del commit y `latest` (ver job `publish-ghcr` en `ci.yml`). El SHA nunca se reutiliza, así que el paquete crece un tag por commit para siempre — gratis en repos públicos, pero desordenado. `.github/workflows/cleanup-ghcr.yml` corre semanalmente (y por `workflow_dispatch`) y borra versiones viejas del paquete `devops-swarm-challenge`, conservando las últimas 10 y protegiendo explícitamente la que tiene el tag `latest`.
+
 ## Estructura
 
 ```
