@@ -1,9 +1,9 @@
 name: Deploy
 
-# Mirrors the "Onpremise" half of reto.png: a developer manually triggers this
-# (GitHub Free on a private repo doesn't support the "required reviewers"
-# environment protection rule - see README - so workflow_dispatch is the stand-in
-# approval gate). The self-hosted runner then promotes the image built by CI
+# Mirrors the "Onpremise" half of reto.png: a developer manually triggers this,
+# and each environment (dev/sit/qa) has a required-reviewers protection rule
+# configured on GitHub, so the run pauses for real manual approval before
+# each stage. The self-hosted runner then promotes the image built by CI
 # through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
 
 on:

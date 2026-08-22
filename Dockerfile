@@ -7,6 +7,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
+USER appuser
+
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
