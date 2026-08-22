@@ -42,13 +42,19 @@ flowchart TB
         RUNNER --> G1{{"✋ approval\nenvironment dev"}}
         G1 --> SWARM
         SWARM --> S_DEV["stack DEV\npuerto 8081, 1 réplica"]
-        S_DEV --> SMOKE_DEV["🩺 smoke test\ncurl /health"]
-        SMOKE_DEV --> G2{{"✋ approval\nenvironment sit"}}
+        S_DEV --> SMOKE_DEV{"🩺 smoke test\ncurl /health"}
+        SMOKE_DEV -->|ok| G2{{"✋ approval\nenvironment sit"}}
+        SMOKE_DEV -->|falla 60s| RB1["⏪ docker service rollback\n(dev)"]
+        RB1 -.->|job falla| RUNNER
         G2 --> S_SIT["stack SIT\npuerto 8082, 1 réplica"]
-        S_SIT --> SMOKE_SIT["🩺 smoke test\ncurl /health"]
-        SMOKE_SIT --> G3{{"✋ approval\nenvironment qa"}}
+        S_SIT --> SMOKE_SIT{"🩺 smoke test\ncurl /health"}
+        SMOKE_SIT -->|ok| G3{{"✋ approval\nenvironment qa"}}
+        SMOKE_SIT -->|falla 60s| RB2["⏪ docker service rollback\n(sit)"]
+        RB2 -.->|job falla| RUNNER
         G3 --> S_QA["stack QA\npuerto 8083, 2 réplicas"]
-        S_QA --> SMOKE_QA["🩺 smoke test\ncurl /health"]
+        S_QA --> SMOKE_QA{"🩺 smoke test\ncurl /health"}
+        SMOKE_QA -->|falla 60s| RB3["⏪ docker service rollback\n(qa)"]
+        RB3 -.->|job falla| RUNNER
         RECOVER["recover-swarm.ps1\nScheduled Task at logon\nself-healing tras reboot"] -.-> SWARM
     end
 

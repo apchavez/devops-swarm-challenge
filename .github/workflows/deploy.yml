@@ -5,8 +5,10 @@ name: Deploy
 # configured on GitHub, so the run pauses for real manual approval before
 # each stage. The self-hosted runner then promotes the image built by CI
 # through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA. Each stage
-# ends with a smoke test against /health, so a broken image fails the job
-# right there instead of silently sitting unhealthy in Swarm.
+# ends with a smoke test against /health; if it doesn't come up healthy in
+# 60s, the job rolls the service back to its previous spec (docker service
+# rollback) before failing, instead of leaving a broken image running or
+# promoting it to the next environment.
 
 on:
   workflow_dispatch:
@@ -49,7 +51,8 @@ jobs:
             echo "Waiting for dev to become healthy... ($i/30)"
             sleep 2
           done
-          echo "dev did not become healthy in time" >&2
+          echo "dev did not become healthy in time - rolling back" >&2
+          docker service rollback devops-swarm-challenge-dev_app --detach=false || echo "rollback failed or nothing to roll back to" >&2
           exit 1
 
   deploy-sit:
@@ -83,7 +86,8 @@ jobs:
             echo "Waiting for sit to become healthy... ($i/30)"
             sleep 2
           done
-          echo "sit did not become healthy in time" >&2
+          echo "sit did not become healthy in time - rolling back" >&2
+          docker service rollback devops-swarm-challenge-sit_app --detach=false || echo "rollback failed or nothing to roll back to" >&2
           exit 1
 
   deploy-qa:
@@ -117,5 +121,6 @@ jobs:
             echo "Waiting for qa to become healthy... ($i/30)"
             sleep 2
           done
-          echo "qa did not become healthy in time" >&2
+          echo "qa did not become healthy in time - rolling back" >&2
+          docker service rollback devops-swarm-challenge-qa_app --detach=false || echo "rollback failed or nothing to roll back to" >&2
           exit 1

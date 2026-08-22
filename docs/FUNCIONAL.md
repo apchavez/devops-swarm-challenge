@@ -42,9 +42,11 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
    (`stack/dev.yml`, `sit.yml` o `qa.yml`).
 8. Inmediatamente después de cada `docker stack deploy`, el job corre un
    **smoke test**: reintenta `curl http://localhost:<puerto>/health` hasta
-   por 60 segundos. Si el servicio no responde a tiempo, el job falla ahí
-   mismo — no avanza al siguiente ambiente con una imagen rota, y no depende
-   de que alguien lo note revisando manualmente.
+   por 60 segundos. Si el servicio no responde a tiempo, el job ejecuta
+   `docker service rollback` sobre ese ambiente (vuelve a la versión
+   anterior automáticamente) y **después** falla — no deja el ambiente en
+   un estado roto ni avanza al siguiente con una imagen que no funciona, y
+   no depende de que alguien lo note revisando manualmente.
 9. La app queda corriendo en Docker Swarm, expuesta en un puerto distinto
    por ambiente (8081 dev, 8082 sit, 8083 qa), verificable con
    `curl http://localhost:<puerto>/health`.
