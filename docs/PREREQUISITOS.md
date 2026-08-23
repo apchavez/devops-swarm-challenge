@@ -38,6 +38,16 @@ Sin esto, `deploy.yml` se ejecuta sin pausas — el gate de aprobación del diag
 
 Se puede aplicar por UI o vía API (ver comando exacto usado en el historial de commits del repo, mensaje "Pin GitHub Actions to commit SHA...").
 
+## 5. Notificaciones por correo de workflows fallidos (cuenta personal, no repo)
+
+GitHub no expone esta preferencia por API — es configuración de cuenta, hay que activarla a mano:
+
+1. Ve a [github.com/settings/notifications](https://github.com/settings/notifications).
+2. En la sección **Actions**, activa **"Send notifications for failed workflows only"**.
+3. Confirma que el email de notificación configurado es el correcto.
+
+Con esto, cualquier fallo en `CI`, `Deploy` o `CodeQL` (incluyendo un smoke test o rollback fallido en `deploy.yml`) llega por correo automáticamente al dueño del run, sin tocar ningún workflow ni agregar secrets.
+
 ## 5. Security & analysis (Settings → Code security)
 
 - **Secret scanning**: enabled.
