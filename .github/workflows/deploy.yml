@@ -6,7 +6,13 @@ name: Deploy
 # each stage. The self-hosted runner then promotes the image built by CI
 # through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
 #
-# Each stage verifies the rollout by polling `docker service inspect
+# Before pulling, each stage verifies the cosign signature ci.yml attached
+# to the image at push time (keyless, Sigstore OIDC) - a supply-chain check
+# that the image was really built by this repo's own ci.yml on main, not
+# pushed by hand or from a fork. `cosign verify` fails the job outright if
+# the signature is missing or doesn't match.
+#
+# Each stage then verifies the rollout by polling `docker service inspect
 # --format .UpdateStatus.State` instead of just curling /health: with
 # update_config.order=start-first (see stack/base.yml), a bad new image
 # still leaves the old, healthy replica answering the published port during
@@ -46,6 +52,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Verify image signature
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh dev
       - name: Verify rollout (Swarm update status + /health)
@@ -91,6 +104,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Verify image signature
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh sit
       - name: Verify rollout (Swarm update status + /health)
@@ -136,6 +156,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Verify image signature
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
       - run: docker pull "$IMAGE"
       - run: ./stack/deploy.sh qa
       - name: Verify rollout (Swarm update status + /health)

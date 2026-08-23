@@ -5,7 +5,9 @@ name: CI
 # documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory
 # (also substituted - see README: JFrog's trial rejects personal-email signups,
 # so this uses GitHub Container Registry instead, same "push the image to a
-# registry" step with zero external account needed).
+# registry" step with zero external account needed). After pushing, the image
+# is signed keylessly with cosign (Sigstore OIDC via id-token: write - no key
+# material stored anywhere); deploy.yml verifies that signature before pulling.
 
 on:
   push:
@@ -108,6 +110,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # keyless cosign signing (Sigstore OIDC), no key material to manage
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -126,3 +129,12 @@ jobs:
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }}
           docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign image (keyless)
+        run: |
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }})
+          echo "Signing $DIGEST"
+          cosign sign --yes "$DIGEST"
