@@ -66,6 +66,10 @@ Después de publicar la imagen en `ci.yml` (job `publish-ghcr`), se firma con **
 
 **Limitación real encontrada:** la action oficial `sigstore/cosign-installer` falla en `deploy.yml` porque ese job corre en el runner self-hosted, que es **Windows** — la action intenta enrutar internamente por WSL (`execvpe(/bin/bash) failed: No such file or directory`) sin importar el shell configurado en el job, y esta máquina no tiene WSL instalado (confirmado con un run real fallido el 2026-08-23). En `ci.yml` sí funciona porque ese job corre en `ubuntu-latest`. Se sustituyó por una descarga directa del binario `cosign-windows-amd64.exe` (versión fija v3.1.3, verificada contra el checksum publicado por el proyecto) en vez de depender de la action.
 
+## Observabilidad mínima
+
+La app expone `/metrics` (formato Prometheus) vía `prometheus-fastapi-instrumentator` — latencia y conteo de requests por endpoint/status code, sin stack adicional que levantar. No sustituye un Prometheus + Grafana reales, pero responde la pregunta básica de "¿está sirviendo tráfico y con qué latencia?" sin depender de mirar `docker service ls` a mano. **Limitación real:** `prometheus-fastapi-instrumentator==8.1.0` (última versión) exige `starlette>=1.0.0`, incompatible con el `fastapi==0.115.0` ya pineado en este repo (que fija `starlette<0.39.0`); se usó `7.1.0`, la última versión de la librería compatible con esa versión de FastAPI.
+
 ## Retención de imágenes en GHCR
 
 Cada push a `main` sube una imagen nueva a `ghcr.io` con dos tags: el SHA del commit y `latest` (ver job `publish-ghcr` en `ci.yml`). El SHA nunca se reutiliza, así que el paquete crece un tag por commit para siempre — gratis en repos públicos, pero desordenado. `.github/workflows/cleanup-ghcr.yml` corre semanalmente (y por `workflow_dispatch`) y borra versiones viejas del paquete `devops-swarm-challenge`, conservando las últimas 10 y protegiendo explícitamente la que tiene el tag `latest`.

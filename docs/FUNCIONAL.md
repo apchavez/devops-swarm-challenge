@@ -69,6 +69,10 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
 | Pipeline automatizado | GitHub Actions (`ci.yml`, `codeql.yml`, `deploy.yml`) |
 | Infraestructura onprem | Runner self-hosted + Docker Swarm en la misma máquina |
 
+## Observabilidad
+
+La app expone `/metrics` en formato Prometheus (vía `prometheus-fastapi-instrumentator`): latencia y conteo de requests por endpoint y código de estado. No es un stack de monitoreo completo (no hay Prometheus ni Grafana desplegados), pero es un endpoint real y verificable, no solo un plan a futuro.
+
 ## Qué NO es este repo
 
 - No es una demo de arquitectura de aplicación de negocio.
