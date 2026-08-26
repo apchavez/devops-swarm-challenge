@@ -1,0 +1,223 @@
+name: Deploy
+
+# Mirrors the "Onpremise" half of reto.png: a developer manually triggers this,
+# and each environment (dev/sit/qa) has a required-reviewers protection rule
+# configured on GitHub, so the run pauses for real manual approval before
+# each stage. The self-hosted runner then promotes the image built by CI
+# through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
+#
+# Before pulling, each stage verifies the cosign signature ci.yml attached
+# to the image at push time (keyless, Sigstore OIDC) - a supply-chain check
+# that the image was really built by this repo's own ci.yml on main, not
+# pushed by hand or from a fork. `cosign verify` fails the job outright if
+# the signature is missing or doesn't match.
+#
+# Each stage then verifies the rollout by polling `docker service inspect
+# --format .UpdateStatus.State` instead of just curling /health: with
+# update_config.order=start-first (see stack/base.yml), a bad new image
+# still leaves the old, healthy replica answering the published port during
+# the rollout, so a bare curl can report "healthy" even when the requested
+# image never came up (confirmed by deliberately deploying a broken image
+# on 2026-08-22 - see README). If Swarm's own failure_action=rollback
+# already reverted the service (state rollback_completed/rollback_paused),
+# the job fails immediately; if the rollout is simply stuck, the job forces
+# a rollback itself as a fallback before failing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (defaults to the latest commit on main)"
+        required: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.event.inputs.image_tag || 'latest' }}
+
+jobs:
+  deploy-dev:
+    name: Deploy to DEV
+    runs-on: [self-hosted, onprem]
+    environment: dev
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Log in to GHCR (self-hosted Docker daemon)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        # sigstore/cosign-installer routes through WSL on Windows self-hosted
+        # runners regardless of the job's shell default, and this runner has
+        # no WSL configured (fails with "execvpe(/bin/bash) failed" - found
+        # 2026-08-23 trying to use it here). Download the pinned Windows
+        # binary directly instead, verifying it against cosign's published
+        # checksum.
+        run: |
+          curl -sL -o cosign.exe "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
+          echo "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be  cosign.exe" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/cosign-bin"
+          mv cosign.exe "$RUNNER_TEMP/cosign-bin/cosign.exe"
+          echo "$RUNNER_TEMP/cosign-bin" >> "$GITHUB_PATH"
+      - name: Verify image signature
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+      - run: docker pull "$IMAGE"
+      - run: ./stack/deploy.sh dev
+      - name: Verify rollout (Swarm update status + /health)
+        run: |
+          SERVICE=devops-swarm-challenge-dev_app
+          for i in $(seq 1 30); do
+            STATE=$(docker service inspect "$SERVICE" --format '{{.UpdateStatus.State}}' 2>/dev/null || true)
+            case "$STATE" in
+              ""|completed)
+                if curl -sf http://localhost:8081/health; then
+                  echo "dev rollout completed and healthy"
+                  exit 0
+                fi
+                ;;
+              rollback_completed|rollback_paused|paused)
+                echo "dev rollout failed - Swarm already reports state: $STATE" >&2
+                exit 1
+                ;;
+            esac
+            echo "Waiting for dev rollout to settle... state='$STATE' ($i/30)"
+            sleep 2
+          done
+          echo "dev rollout did not settle in time (state='$STATE') - rolling back" >&2
+          docker service rollback "$SERVICE" --detach=false || echo "rollback failed or nothing to roll back to" >&2
+          exit 1
+
+  deploy-sit:
+    name: Deploy to SIT
+    needs: deploy-dev
+    runs-on: [self-hosted, onprem]
+    environment: sit
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Log in to GHCR (self-hosted Docker daemon)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        # sigstore/cosign-installer routes through WSL on Windows self-hosted
+        # runners regardless of the job's shell default, and this runner has
+        # no WSL configured (fails with "execvpe(/bin/bash) failed" - found
+        # 2026-08-23 trying to use it here). Download the pinned Windows
+        # binary directly instead, verifying it against cosign's published
+        # checksum.
+        run: |
+          curl -sL -o cosign.exe "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
+          echo "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be  cosign.exe" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/cosign-bin"
+          mv cosign.exe "$RUNNER_TEMP/cosign-bin/cosign.exe"
+          echo "$RUNNER_TEMP/cosign-bin" >> "$GITHUB_PATH"
+      - name: Verify image signature
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+      - run: docker pull "$IMAGE"
+      - run: ./stack/deploy.sh sit
+      - name: Verify rollout (Swarm update status + /health)
+        run: |
+          SERVICE=devops-swarm-challenge-sit_app
+          for i in $(seq 1 30); do
+            STATE=$(docker service inspect "$SERVICE" --format '{{.UpdateStatus.State}}' 2>/dev/null || true)
+            case "$STATE" in
+              ""|completed)
+                if curl -sf http://localhost:8082/health; then
+                  echo "sit rollout completed and healthy"
+                  exit 0
+                fi
+                ;;
+              rollback_completed|rollback_paused|paused)
+                echo "sit rollout failed - Swarm already reports state: $STATE" >&2
+                exit 1
+                ;;
+            esac
+            echo "Waiting for sit rollout to settle... state='$STATE' ($i/30)"
+            sleep 2
+          done
+          echo "sit rollout did not settle in time (state='$STATE') - rolling back" >&2
+          docker service rollback "$SERVICE" --detach=false || echo "rollback failed or nothing to roll back to" >&2
+          exit 1
+
+  deploy-qa:
+    name: Deploy to QA
+    needs: deploy-sit
+    runs-on: [self-hosted, onprem]
+    environment: qa
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Log in to GHCR (self-hosted Docker daemon)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        # sigstore/cosign-installer routes through WSL on Windows self-hosted
+        # runners regardless of the job's shell default, and this runner has
+        # no WSL configured (fails with "execvpe(/bin/bash) failed" - found
+        # 2026-08-23 trying to use it here). Download the pinned Windows
+        # binary directly instead, verifying it against cosign's published
+        # checksum.
+        run: |
+          curl -sL -o cosign.exe "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
+          echo "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be  cosign.exe" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/cosign-bin"
+          mv cosign.exe "$RUNNER_TEMP/cosign-bin/cosign.exe"
+          echo "$RUNNER_TEMP/cosign-bin" >> "$GITHUB_PATH"
+      - name: Verify image signature
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+      - run: docker pull "$IMAGE"
+      - run: ./stack/deploy.sh qa
+      - name: Verify rollout (Swarm update status + /health)
+        run: |
+          SERVICE=devops-swarm-challenge-qa_app
+          for i in $(seq 1 30); do
+            STATE=$(docker service inspect "$SERVICE" --format '{{.UpdateStatus.State}}' 2>/dev/null || true)
+            case "$STATE" in
+              ""|completed)
+                if curl -sf http://localhost:8083/health; then
+                  echo "qa rollout completed and healthy"
+                  exit 0
+                fi
+                ;;
+              rollback_completed|rollback_paused|paused)
+                echo "qa rollout failed - Swarm already reports state: $STATE" >&2
+                exit 1
+                ;;
+            esac
+            echo "Waiting for qa rollout to settle... state='$STATE' ($i/30)"
+            sleep 2
+          done
+          echo "qa rollout did not settle in time (state='$STATE') - rolling back" >&2
+          docker service rollback "$SERVICE" --detach=false || echo "rollback failed or nothing to roll back to" >&2
+          exit 1

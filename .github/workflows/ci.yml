@@ -1,0 +1,140 @@
+name: CI
+
+# Mirrors the "Cloud" half of reto.png: Build Code -> Unit Test -> Code analysis
+# -> GitHub Advanced Security (see codeql.yml) -> Fluid Attacks (Semgrep SAST here,
+# documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory
+# (also substituted - see README: JFrog's trial rejects personal-email signups,
+# so this uses GitHub Container Registry instead, same "push the image to a
+# registry" step with zero external account needed). After pushing, the image
+# is signed keylessly with cosign (Sigstore OIDC via id-token: write - no key
+# material stored anywhere); deploy.yml verifies that signature before pulling.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  build-test:
+    name: Build Code + Unit Test + Code analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint and format check (Code analysis)
+        run: |
+          ruff format --check .
+          ruff check .
+
+      - name: Run tests with coverage (Unit Test)
+        run: pytest
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: warn
+
+  fluid-attacks-equivalent:
+    name: Fluid Attacks equivalent (Semgrep SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Semgrep SAST scan (SARIF)
+        run: semgrep scan --config p/ci --sarif --output semgrep.sarif
+        continue-on-error: true
+
+      - name: Upload SARIF to Security tab
+        uses: github/codeql-action/upload-sarif@42947a340483f03ba47bb1a039b2c519aab3df85 # v3.37.8
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  quality-gate-sonar:
+    name: Quality Gate Sonar
+    needs: [build-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: pytest
+
+      - name: SonarCloud analysis
+        if: vars.SONAR_ORGANIZATION != '' && (github.event_name != 'pull_request' || github.actor != 'dependabot[bot]')
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  publish-ghcr:
+    name: Build image + push to GitHub Container Registry
+    needs: [build-test, quality-gate-sonar, fluid-attacks-equivalent]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing (Sigstore OIDC), no key material to manage
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }} -t ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest .
+
+      - name: Push image to GHCR
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign image (keyless)
+        run: |
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }})
+          echo "Signing $DIGEST"
+          cosign sign --yes "$DIGEST"

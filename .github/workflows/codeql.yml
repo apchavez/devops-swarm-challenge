@@ -1,0 +1,38 @@
+name: CodeQL
+
+# The "GitHub Advanced Security" box in reto.png.
+#
+# Repo made public 2026-08-21 specifically so GHAS runs for real (code scanning +
+# secret scanning are free on public repos on any plan). SARIF now uploads to the
+# Security tab normally, same as it would in an org with a GHAS license.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (python)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@42947a340483f03ba47bb1a039b2c519aab3df85 # v3.37.8
+        with:
+          languages: python
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@42947a340483f03ba47bb1a039b2c519aab3df85 # v3.37.8
+        with:
+          category: "/language:python"

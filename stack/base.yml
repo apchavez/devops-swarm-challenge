@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  app:
+    image: ${IMAGE:-devops-swarm-challenge:local}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      update_config:
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+    networks:
+      - devops-swarm-challenge
+
+networks:
+  devops-swarm-challenge:
+    driver: overlay
