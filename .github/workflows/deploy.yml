@@ -35,8 +35,11 @@ on:
         required: false
 
 env:
-  JFROG_REGISTRY: docker-trial.trialsvu54e.jfrog.io
-  IMAGE: docker-trial.trialsvu54e.jfrog.io/devops-swarm-challenge:${{ github.event.inputs.image_tag || 'latest' }}
+  # Path-based Docker registry method: login host is the bare instance,
+  # the repo-key (docker-trial) is a path prefix in the image name. See
+  # ci.yml for why the subdomain method doesn't work here.
+  JFROG_HOST: trialsvu54e.jfrog.io
+  IMAGE: trialsvu54e.jfrog.io/docker-trial/devops-swarm-challenge:${{ github.event.inputs.image_tag || 'latest' }}
 
 jobs:
   deploy-dev:
@@ -53,7 +56,7 @@ jobs:
       - name: Log in to JFrog Artifactory (self-hosted Docker daemon)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ${{ env.JFROG_REGISTRY }}
+          registry: ${{ env.JFROG_HOST }}
           username: ${{ secrets.JFROG_USERNAME }}
           password: ${{ secrets.JFROG_ACCESS_TOKEN }}
       - name: Install cosign
@@ -115,7 +118,7 @@ jobs:
       - name: Log in to JFrog Artifactory (self-hosted Docker daemon)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ${{ env.JFROG_REGISTRY }}
+          registry: ${{ env.JFROG_HOST }}
           username: ${{ secrets.JFROG_USERNAME }}
           password: ${{ secrets.JFROG_ACCESS_TOKEN }}
       - name: Install cosign
@@ -177,7 +180,7 @@ jobs:
       - name: Log in to JFrog Artifactory (self-hosted Docker daemon)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ${{ env.JFROG_REGISTRY }}
+          registry: ${{ env.JFROG_HOST }}
           username: ${{ secrets.JFROG_USERNAME }}
           password: ${{ secrets.JFROG_ACCESS_TOKEN }}
       - name: Install cosign
