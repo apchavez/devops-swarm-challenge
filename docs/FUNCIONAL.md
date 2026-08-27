@@ -79,7 +79,7 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
 
 ## Observabilidad
 
-La app expone `/metrics` en formato Prometheus (vía `prometheus-fastapi-instrumentator`): latencia y conteo de requests por endpoint y código de estado. No es un stack de monitoreo completo (no hay Prometheus ni Grafana desplegados), pero es un endpoint real y verificable, no solo un plan a futuro.
+La app expone `/metrics` en formato Prometheus (vía `prometheus-fastapi-instrumentator`): latencia y conteo de requests por endpoint y código de estado. Además hay un stack de Prometheus + Grafana real desplegado por separado (`stack/monitoring.yml`) que scrapea esos endpoints y trae el datasource ya provisionado en Grafana — ver `README.md`, sección Observabilidad, para los comandos.
 
 ## Qué NO es este repo
 

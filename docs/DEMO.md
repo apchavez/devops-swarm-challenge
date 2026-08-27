@@ -61,6 +61,14 @@ curl http://localhost:8083/hello    # {"message": "Hola mundo"}
 curl http://localhost:8083/metrics  # métricas Prometheus reales (latencia, conteo de requests)
 ```
 
+## 5.5. (Opcional) Mostrar el dashboard de Grafana
+
+```bash
+docker stack deploy -c stack/monitoring.yml monitoring
+```
+
+Abre `http://localhost:9090/targets` — muestra los 3 jobs (`devops-swarm-dev/sit/qa`) en estado `up`, scrapeando `/metrics` de verdad. Luego `http://localhost:3000` (admin/admin) — el datasource de Prometheus ya está provisionado, sin configurar nada a mano.
+
 ## 6. (Opcional, si hay tiempo) Mostrar el rollback en vivo
 
 Esta es la parte que más impresiona porque no es un feature "de manual" — se descubrió probándolo de verdad:

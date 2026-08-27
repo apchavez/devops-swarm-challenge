@@ -1,0 +1,49 @@
+version: "3.8"
+
+# Standalone observability stack: scrapes the /metrics endpoint exposed by
+# dev/sit/qa (see app/main.py, prometheus-fastapi-instrumentator) via
+# host.docker.internal, since those apps publish their ports on the host.
+# Deployed separately from dev/sit/qa - not part of ci.yml/deploy.yml, and
+# does not touch their networks or services.
+#
+# Deploy:   docker stack deploy -c stack/monitoring.yml monitoring
+# Remove:   docker stack rm monitoring
+
+configs:
+  prometheus_config:
+    file: ./prometheus.yml
+  grafana_datasources:
+    file: ./grafana-datasources.yml
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:13.1.4
+    configs:
+      - source: grafana_datasources
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: overlay
+
+volumes:
+  grafana-data:

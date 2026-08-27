@@ -102,3 +102,5 @@ No hace falta instalar Python localmente para probar: `docker/dev.sh` corre todo
 | qa | 8083 | 2 |
 
 Todos mapean al puerto 8000 del contenedor (`uvicorn`).
+
+Monitoreo (`stack/monitoring.yml`, stack separado): Prometheus en `9090`, Grafana en `3000`.

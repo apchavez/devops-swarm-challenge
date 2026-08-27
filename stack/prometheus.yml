@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "devops-swarm-dev"
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+  - job_name: "devops-swarm-sit"
+    static_configs:
+      - targets: ["host.docker.internal:8082"]
+  - job_name: "devops-swarm-qa"
+    static_configs:
+      - targets: ["host.docker.internal:8083"]
