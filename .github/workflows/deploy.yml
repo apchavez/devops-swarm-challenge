@@ -6,11 +6,15 @@ name: Deploy
 # each stage. The self-hosted runner then promotes the image built by CI
 # through DMGR1/DMGR2-style Docker Swarm stacks: DEV -> SIT -> QA.
 #
-# Before pulling, each stage verifies the cosign signature ci.yml attached
-# to the image at push time (keyless, Sigstore OIDC) - a supply-chain check
-# that the image was really built by this repo's own ci.yml on main, not
-# pushed by hand or from a fork. `cosign verify` fails the job outright if
-# the signature is missing or doesn't match.
+# Images are pulled from a real JFrog Artifactory trial instance (see
+# README - JFrog was originally substituted with GHCR because the trial
+# signup rejected a personal email; real corporate-email access became
+# available 2026-08-27). Before pulling, each stage verifies the cosign
+# signature ci.yml attached to the image at push time (keyless, Sigstore
+# OIDC) - a supply-chain check that the image was really built by this
+# repo's own ci.yml on main, not pushed by hand or from a fork. `cosign
+# verify` fails the job outright if the signature is missing or doesn't
+# match.
 #
 # Each stage then verifies the rollout by polling `docker service inspect
 # --format .UpdateStatus.State` instead of just curling /health: with
@@ -31,7 +35,8 @@ on:
         required: false
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.event.inputs.image_tag || 'latest' }}
+  JFROG_REGISTRY: docker-trial.trialsvu54e.jfrog.io
+  IMAGE: docker-trial.trialsvu54e.jfrog.io/devops-swarm-challenge:${{ github.event.inputs.image_tag || 'latest' }}
 
 jobs:
   deploy-dev:
@@ -40,18 +45,17 @@ jobs:
     environment: dev
     permissions:
       contents: read
-      packages: read
     defaults:
       run:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Log in to GHCR (self-hosted Docker daemon)
+      - name: Log in to JFrog Artifactory (self-hosted Docker daemon)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.JFROG_REGISTRY }}
+          username: ${{ secrets.JFROG_USERNAME }}
+          password: ${{ secrets.JFROG_ACCESS_TOKEN }}
       - name: Install cosign
         # sigstore/cosign-installer routes through WSL on Windows self-hosted
         # runners regardless of the job's shell default, and this runner has
@@ -103,18 +107,17 @@ jobs:
     environment: sit
     permissions:
       contents: read
-      packages: read
     defaults:
       run:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Log in to GHCR (self-hosted Docker daemon)
+      - name: Log in to JFrog Artifactory (self-hosted Docker daemon)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.JFROG_REGISTRY }}
+          username: ${{ secrets.JFROG_USERNAME }}
+          password: ${{ secrets.JFROG_ACCESS_TOKEN }}
       - name: Install cosign
         # sigstore/cosign-installer routes through WSL on Windows self-hosted
         # runners regardless of the job's shell default, and this runner has
@@ -166,18 +169,17 @@ jobs:
     environment: qa
     permissions:
       contents: read
-      packages: read
     defaults:
       run:
         shell: 'C:\PROGRA~1\Git\bin\bash.exe -e {0}'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Log in to GHCR (self-hosted Docker daemon)
+      - name: Log in to JFrog Artifactory (self-hosted Docker daemon)
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.JFROG_REGISTRY }}
+          username: ${{ secrets.JFROG_USERNAME }}
+          password: ${{ secrets.JFROG_ACCESS_TOKEN }}
       - name: Install cosign
         # sigstore/cosign-installer routes through WSL on Windows self-hosted
         # runners regardless of the job's shell default, and this runner has

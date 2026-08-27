@@ -2,12 +2,13 @@ name: CI
 
 # Mirrors the "Cloud" half of reto.png: Build Code -> Unit Test -> Code analysis
 # -> GitHub Advanced Security (see codeql.yml) -> Fluid Attacks (Semgrep SAST here,
-# documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory
-# (also substituted - see README: JFrog's trial rejects personal-email signups,
-# so this uses GitHub Container Registry instead, same "push the image to a
-# registry" step with zero external account needed). After pushing, the image
-# is signed keylessly with cosign (Sigstore OIDC via id-token: write - no key
-# material stored anywhere); deploy.yml verifies that signature before pulling.
+# documented equivalent - see README) -> Quality Gate Sonar -> JFrog Artifactory.
+# JFrog was originally substituted with GitHub Container Registry because the
+# trial signup rejected a personal Gmail address (see README). Real corporate-
+# email access became available on 2026-08-27, so this now pushes to a real
+# JFrog Artifactory instance instead. After pushing, the image is signed
+# keylessly with cosign (Sigstore OIDC via id-token: write - no key material
+# stored anywhere); deploy.yml verifies that signature before pulling.
 
 on:
   push:
@@ -102,39 +103,40 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  publish-ghcr:
-    name: Build image + push to GitHub Container Registry
+  publish-jfrog:
+    name: Build image + push to JFrog Artifactory
     needs: [build-test, quality-gate-sonar, fluid-attacks-equivalent]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      JFROG_REGISTRY: docker-trial.trialsvu54e.jfrog.io
     permissions:
       contents: read
-      packages: write
       id-token: write # keyless cosign signing (Sigstore OIDC), no key material to manage
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Log in to GHCR
+      - name: Log in to JFrog Artifactory
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.JFROG_REGISTRY }}
+          username: ${{ secrets.JFROG_USERNAME }}
+          password: ${{ secrets.JFROG_ACCESS_TOKEN }}
 
       - name: Build Docker image
-        run: docker build -t ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }} -t ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest .
+        run: docker build -t $JFROG_REGISTRY/devops-swarm-challenge:${{ github.sha }} -t $JFROG_REGISTRY/devops-swarm-challenge:latest .
 
-      - name: Push image to GHCR
+      - name: Push image to JFrog Artifactory
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }}
-          docker push ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:latest
+          docker push $JFROG_REGISTRY/devops-swarm-challenge:${{ github.sha }}
+          docker push $JFROG_REGISTRY/devops-swarm-challenge:latest
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign image (keyless)
         run: |
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/${{ github.repository_owner }}/devops-swarm-challenge:${{ github.sha }})
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $JFROG_REGISTRY/devops-swarm-challenge:${{ github.sha }})
           echo "Signing $DIGEST"
           cosign sign --yes "$DIGEST"
