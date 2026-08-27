@@ -59,6 +59,14 @@ flowchart TB
         SMOKE_QA -->|falla 60s| RB3["⏪ docker service rollback\n(qa)"]
         RB3 -.->|job falla| RUNNER
         RECOVER["recover-swarm.ps1\nScheduled Task at logon\nself-healing tras reboot"] -.-> SWARM
+
+        MON["📊 stack monitoring.yml\n(separado, no toca dev/sit/qa)"]
+        PROM["Prometheus\nscrapea /metrics cada 15s"]
+        GRAF["Grafana\ndatasource auto-provisionado"]
+        MON --> PROM --> GRAF
+        S_DEV -.->|scrape| PROM
+        S_SIT -.->|scrape| PROM
+        S_QA -.->|scrape| PROM
     end
 
     APPROVE -->|workflow_dispatch\ndeploy.yml| RUNNER
@@ -69,6 +77,9 @@ flowchart TB
     style DEPENDABOT fill:#d1e7dd,stroke:#0f5132
     style COSIGN fill:#d1e7dd,stroke:#0f5132
     style VERIFY fill:#d1e7dd,stroke:#0f5132
+    style MON fill:#cfe2ff,stroke:#084298
+    style PROM fill:#cfe2ff,stroke:#084298
+    style GRAF fill:#cfe2ff,stroke:#084298
 ```
 
 > Los bloques en amarillo (`Semgrep`, `GHCR`) son sustituciones documentadas de herramientas comerciales (`Fluid Attacks`, `JFrog Artifactory`) que no fue posible contratar/usar en una cuenta personal — ver el detalle de cada una en `README.md`. Todo lo demás (GitHub Advanced Security, Quality Gate Sonar, el gate de aprobación por ambiente, el runner self-hosted, Docker Swarm) es la herramienta real, no un simulacro.
