@@ -9,8 +9,9 @@ Documento de referencia para reproducir este pipeline desde cero, o para explica
 | Cuenta de GitHub | Alojar el repo y correr Actions | El repo debe ser **público** para que GHAS (CodeQL + secret scanning) y `required_reviewers` en Environments sean gratuitos en una cuenta personal (ver `README.md`) |
 | Cuenta de SonarCloud | Quality Gate Sonar | Gratis para repos públicos; genera un `SONAR_TOKEN` |
 | Docker instalado localmente | Build de la imagen, Docker Swarm, correr el self-hosted runner | Docker Desktop en Windows, o Docker Engine en Linux |
+| Cuenta de JFrog Artifactory (trial) | Registry real de imágenes | Requiere correo corporativo (rechaza Gmail personal); genera `JFROG_USERNAME` + un Access Token. El trial se "duerme" por inactividad — hay que reactivarlo manualmente desde la consola web antes de que el pipeline pueda usarlo. |
 
-No se necesita cuenta de JFrog ni de Fluid Attacks — ver la justificación de por qué se sustituyeron en `README.md`.
+No se necesita cuenta de Fluid Attacks — ver la justificación de por qué se sustituyó en `README.md`.
 
 ## 2. Secrets y variables de GitHub (Settings → Secrets and variables → Actions)
 
@@ -18,7 +19,11 @@ No se necesita cuenta de JFrog ni de Fluid Attacks — ver la justificación de 
 |---|---|---|
 | `SONAR_TOKEN` | Secret | `ci.yml`, job `quality-gate-sonar` |
 | `SONAR_ORGANIZATION` | Variable (`vars`) | `ci.yml`, condición del step de SonarCloud |
-| `GITHUB_TOKEN` | Automático (no se crea a mano) | login a GHCR, checkout, upload-sarif |
+| `JFROG_USERNAME` | Secret | `ci.yml` (`publish-jfrog`) y `deploy.yml` (login a JFrog) |
+| `JFROG_ACCESS_TOKEN` | Secret | `ci.yml` (`publish-jfrog`) y `deploy.yml` (login a JFrog) |
+| `GITHUB_TOKEN` | Automático (no se crea a mano) | checkout, upload-sarif |
+
+**Nota sobre el hostname de JFrog:** el registry Docker se referencia por **path** (`<instancia>.jfrog.io/<repo-key>/imagen:tag`), no por subdominio con guion (`<repo-key>-<instancia>.jfrog.io`) — ese segundo método redirige a una página de "reactivar servidor" incluso con la instancia activa, hallazgo real del 2026-08-27 (ver `README.md`).
 
 ## 3. GitHub Environments (Settings → Environments)
 
@@ -65,6 +70,7 @@ En la máquina que va a actuar como "Onpremise":
 3. Instalar el runner como servicio para que sobreviva reinicios.
 4. Tener Docker instalado y el usuario del runner con permisos para usarlo.
 5. Ejecutar `docker swarm init` una vez en esa máquina (idempotente: si ya está activo, no hace nada).
+6. **`docker login trialsvu54e.jfrog.io` una vez, manualmente, con el mismo usuario que corre el runner/scheduled tasks.** A diferencia de GHCR (paquete público, pull anónimo permitido), JFrog exige autenticación siempre — confirmado con un `docker pull` real que falló con "Authentication is required" antes de este login (2026-08-27). Sin este paso, `recover-swarm.ps1` no podría hacer pull tras un reinicio, porque `deploy.yml` solo deja credenciales efímeras dentro de cada job de GitHub Actions (se hace logout automático al terminar), no persistentes en la máquina.
 
 ### Auto-recuperación del Swarm
 

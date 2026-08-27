@@ -4,7 +4,7 @@
 # manual intervention before the runner's next deploy.yml run.
 
 $ErrorActionPreference = "Stop"
-$Image = "ghcr.io/apchavez/devops-swarm-challenge:latest"
+$Image = "trialsvu54e.jfrog.io/docker-trial/devops-swarm-challenge:latest"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 
 function Wait-ForDocker {

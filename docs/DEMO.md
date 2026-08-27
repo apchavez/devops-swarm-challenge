@@ -13,8 +13,8 @@ Orden sugerido para mostrar el pipeline completo en vivo, de principio a fin, co
 Abre `docs/ARQUITECTURA.md` en GitHub (renderiza el diagrama Mermaid automáticamente). Explica:
 
 - Este es el diagrama del reto (`reto.png`) reconstruido con lo que realmente se implementó.
-- Los dos bloques amarillos (Semgrep, GHCR) son sustituciones documentadas — explica en 20 segundos por qué (ver `README.md`, tabla de mapeo).
-- Todo lo demás — GitHub Advanced Security, SonarCloud, el runner self-hosted, Docker Swarm, el gate de aprobación por ambiente — es la herramienta real.
+- El único bloque amarillo (Semgrep) es una sustitución documentada de Fluid Attacks — explica en 20 segundos por qué (ver `README.md`, tabla de mapeo).
+- Todo lo demás — **incluyendo JFrog Artifactory desde el 2026-08-27** —, GitHub Advanced Security, SonarCloud, el runner self-hosted, Docker Swarm, el gate de aprobación por ambiente, es la herramienta real.
 
 ## 2. Disparar el pipeline de CI (5 min)
 
@@ -23,7 +23,7 @@ Abre `docs/ARQUITECTURA.md` en GitHub (renderiza el diagrama Mermaid automática
    - `Build Code + Unit Test + Code analysis` → build + pytest + ruff.
    - `Fluid Attacks equivalent (Semgrep SAST)` → corre dentro de un contenedor `semgrep/semgrep`, genera SARIF.
    - `Quality Gate Sonar` → cobertura + análisis en SonarCloud.
-   - `Build image + push to GitHub Container Registry` → solo corre si los tres anteriores pasan y es push a `main`; el último step firma la imagen con `cosign` (keyless).
+   - `Build image + push to JFrog Artifactory` → solo corre si los tres anteriores pasan y es push a `main`; el último step firma la imagen con `cosign` (keyless).
 3. Cuando termine, ve a la pestaña **Security → Code scanning alerts** del repo y muestra que hay hallazgos de **dos herramientas distintas**: CodeQL y Semgrep, cada uno con su categoría.
 4. Muestra **Security → Dependabot** y explica que las alertas de vulnerabilidad de dependencias (Python, Docker, GitHub Actions) llegan aquí automáticamente — puedes mencionar el caso real: Dependabot encontró `pytest` vulnerable (CVE-2025-71176) apenas se habilitó, y se corrigió el mismo día.
 
@@ -37,7 +37,7 @@ uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
 Explica: no se usa el tag `@v4` (mutable, un mantenedor comprometido podría re-apuntarlo — pasó de verdad con `trivy-action` y `kics-github-action`), sino el commit SHA exacto. Menciona que esto lo encontró el propio Semgrep corriendo sobre el repo (dogfooding: la herramienta de seguridad del pipeline audita al pipeline mismo).
 
-Complementa mostrando el step `cosign verify` en `deploy.yml`: la imagen se firma al publicarse y se verifica antes de cada `docker pull` — si alguien subiera una imagen a mano a `ghcr.io` (sin pasar por `ci.yml`), `cosign verify` la rechazaría porque no tendría la firma esperada.
+Complementa mostrando el step `cosign verify` en `deploy.yml`: la imagen se firma al publicarse y se verifica antes de cada `docker pull` — si alguien subiera una imagen a mano a JFrog (sin pasar por `ci.yml`), `cosign verify` la rechazaría porque no tendría la firma esperada.
 
 ## 4. Disparar el despliegue con aprobación manual (5-8 min, la parte más visual)
 
@@ -76,13 +76,14 @@ Esta es la parte que más impresiona porque no es un feature "de manual" — se 
 1. Cuenta la historia: al implementar el smoke test, se probó a propósito desplegando una imagen rota (`broken-test`, sin servidor) a `dev`.
 2. El hallazgo real: Docker Swarm **ya hace rollback solo** (`failure_action: rollback` en `stack/base.yml`) — pero el smoke test inicial (`curl` simple) daba un **falso positivo**, porque con `order: start-first` la réplica vieja sigue sirviendo tráfico mientras la nueva intenta arrancar, así que el `curl` pegaba a la instancia vieja y el job de GitHub Actions marcaba "healthy" sin que la imagen nueva jamás funcionara.
 3. La corrección: el step ahora consulta `docker service inspect --format '{{.UpdateStatus.State}}'` — el estado real del rollout en Swarm — antes de confiar en el `curl`.
-4. Si quieres reproducirlo en vivo: construye una imagen con `CMD ["sleep", "9999"]`, súbela a `ghcr.io` con un tag de prueba, dispara `Deploy` con ese `image_tag`, aprueba `dev`, y muestra en la terminal `docker service ps devops-swarm-challenge-dev_app` mientras el job de Actions falla con el motivo correcto (`rollout failed - Swarm already reports state: rollback_completed`).
+4. Si quieres reproducirlo en vivo: construye una imagen con `CMD ["sleep", "9999"]`, súbela a JFrog con un tag de prueba, dispara `Deploy` con ese `image_tag`, aprueba `dev`, y muestra en la terminal `docker service ps devops-swarm-challenge-dev_app` mientras el job de Actions falla con el motivo correcto (`rollout failed - Swarm already reports state: rollback_completed`).
 
 ## 7. Cierre — qué preguntas anticipar
 
 | Pregunta probable | Respuesta corta |
 |---|---|
-| "¿Por qué no usaste JFrog/Fluid Attacks reales?" | Limitaciones de acceso de cuenta personal (correo corporativo exigido / mínimo de licenciamiento comercial), documentado con las respuestas HTTP exactas en `README.md`. El patrón arquitectónico (subir a un registry en la nube, SAST en el pipeline) es idéntico. |
+| "¿Por qué no usaste Fluid Attacks real?" | Limitación de licenciamiento comercial de cuenta personal (mínimo de 10 "autores" facturables, sin tier gratuito), documentado en `README.md`. Semgrep cubre la misma categoría de control. |
+| "¿Y JFrog? ¿Sigue siendo GHCR?" | No — desde el 2026-08-27 el pipeline usa JFrog Artifactory real (trial con correo corporativo). Se sustituyó por GHCR temporalmente mientras no había acceso, y se migró apenas fue posible; incluso encontré y corregí un problema real de hostname (subdominio vs. path) durante la migración. |
 | "¿Por qué un solo nodo Swarm y no DMGR1/DMGR2 reales?" | Es una simulación en una sola máquina en el swarm que sirve `dev`/`sit`/`qa`, pero el patrón multi-nodo se verificó de verdad por separado: un swarm de prueba aislado con dos contenedores `docker:dind` unidos como managers reales, desplegando el `stack/base.yml` sin cambios y con Swarm repartiendo réplicas entre ambos nodos (ver README). No es una suposición. |
 | "¿Cómo se garantiza que nadie salte el gate de aprobación?" | `required_reviewers` es una regla de GitHub a nivel de Environment, no algo que el código pueda saltarse — solo se puede desactivar desde Settings con permisos de administrador del repo. |
 | "¿Qué pasa si el self-hosted runner se cae?" | `recover-swarm.ps1`, registrado como Scheduled Task, reinicializa el Swarm y vuelve a desplegar los 3 stacks al reiniciar la máquina. |

@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ENVIRONMENT="${1:?usage: deploy.sh <dev|sit|qa>}"
-export IMAGE="${IMAGE:?IMAGE must be set, e.g. IMAGE=ghcr.io/apchavez/devops-swarm-challenge:latest}"
+export IMAGE="${IMAGE:?IMAGE must be set, e.g. IMAGE=trialsvu54e.jfrog.io/docker-trial/devops-swarm-challenge:latest}"
 
 docker stack deploy \
   -c "stack/base.yml" \

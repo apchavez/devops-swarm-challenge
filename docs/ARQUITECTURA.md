@@ -16,14 +16,14 @@ flowchart TB
             CA["Code analysis\nruff lint+format"]
             SEMGREP["Fluid Attacks equivalente\nSemgrep SAST → SARIF"]
             SONAR["Quality Gate Sonar\nSonarCloud"]
-            GHCR["JFrog equivalente\nGitHub Container Registry\n(ghcr.io)"]
+            JFROG["JFrog Artifactory\ntrialsvu54e.jfrog.io/docker-trial\n(real desde 2026-08-27)"]
             COSIGN["🔏 cosign sign\nkeyless (Sigstore OIDC)"]
             BUILD --> UT --> CA
             CA --> SEMGREP
             CA --> SONAR
-            SEMGREP --> GHCR
-            SONAR --> GHCR
-            GHCR --> COSIGN
+            SEMGREP --> JFROG
+            SONAR --> JFROG
+            JFROG --> COSIGN
         end
 
         GHA --> CI
@@ -72,7 +72,7 @@ flowchart TB
     APPROVE -->|workflow_dispatch\ndeploy.yml| RUNNER
 
     style SEMGREP fill:#fff3cd,stroke:#d39e00
-    style GHCR fill:#fff3cd,stroke:#d39e00
+    style JFROG fill:#d1e7dd,stroke:#0f5132
     style SECURITY fill:#d1e7dd,stroke:#0f5132
     style DEPENDABOT fill:#d1e7dd,stroke:#0f5132
     style COSIGN fill:#d1e7dd,stroke:#0f5132
@@ -82,16 +82,15 @@ flowchart TB
     style GRAF fill:#cfe2ff,stroke:#084298
 ```
 
-> Los bloques en amarillo (`Semgrep`, `GHCR`) son sustituciones documentadas de herramientas comerciales (`Fluid Attacks`, `JFrog Artifactory`) que no fue posible contratar/usar en una cuenta personal — ver el detalle de cada una en `README.md`. Todo lo demás (GitHub Advanced Security, Quality Gate Sonar, el gate de aprobación por ambiente, el runner self-hosted, Docker Swarm) es la herramienta real, no un simulacro.
+> El bloque en amarillo (`Semgrep`) es una sustitución documentada de una herramienta comercial (`Fluid Attacks`) que no fue posible contratar en una cuenta personal — ver el detalle en `README.md`. **JFrog Artifactory ya no es una sustitución**: desde el 2026-08-27 el pipeline publica y firma la imagen contra un trial real (`trialsvu54e.jfrog.io`). Todo lo demás (GitHub Advanced Security, Quality Gate Sonar, el gate de aprobación por ambiente, el runner self-hosted, Docker Swarm) es también la herramienta real, no un simulacro.
 
 ## Diferencias frente al diagrama original (`reto.png`)
 
 | Elemento | reto.png | Este repo | Motivo |
 |---|---|---|---|
 | Fluid Attacks | Herramienta comercial | Semgrep (SAST), sube SARIF real a Security | Fluid Attacks exige contrato con mínimo de 10 "autores" facturables, sin tier gratuito |
-| JFrog Artifactory | Registry comercial | GitHub Container Registry (ghcr.io) | El trial de JFrog rechaza signup con correo personal (exige dominio corporativo) |
-| DMGR1 / DMGR2 | Dos managers Swarm físicos separados | Un solo nodo Swarm en la misma máquina | Simulación de un solo desarrollador; el patrón `docker stack deploy` es idéntico a un swarm multi-nodo real |
-| Todo lo demás | — | Igual | GitHub Advanced Security, Quality Gate Sonar, GitHub Secrets, self-hosted runner, gate de aprobación por ambiente y flujo DEV→SIT→QA son la implementación real, no una simulación |
+| DMGR1 / DMGR2 | Dos managers Swarm físicos separados | Un solo nodo Swarm en la misma máquina | Simulación de un solo desarrollador; el patrón `docker stack deploy` sí se verificó en un swarm de prueba multi-nodo real (ver README) |
+| Todo lo demás | — | Igual | JFrog Artifactory, GitHub Advanced Security, Quality Gate Sonar, GitHub Secrets, self-hosted runner, gate de aprobación por ambiente y flujo DEV→SIT→QA son la implementación real, no una simulación |
 
 ## Capas agregadas (no estaban en el diagrama original)
 
@@ -103,5 +102,5 @@ Estas se fueron descubriendo y cerrando en auditorías posteriores al mapeo inic
 - Contenedor de la app corriendo como usuario no-root.
 - Smoke test + verificación real del estado de rollout de Swarm tras cada deploy, con rollback automático si falla.
 - Firma de imagen con **cosign** (keyless) en `ci.yml`, verificada con `cosign verify` antes de cada `docker pull` en `deploy.yml`.
-- Retención automática de imágenes en GHCR (`cleanup-ghcr.yml`, semanal).
 - **Observabilidad**: `/metrics` en la app + stack de Prometheus + Grafana desplegado por separado (`stack/monitoring.yml`).
+- **JFrog Artifactory real** (2026-08-27): reemplazó a GHCR una vez disponible el acceso corporativo (ver README para el hallazgo de subdominio vs. path).

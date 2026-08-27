@@ -30,10 +30,11 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
      - quality-gate-sonar: corre pytest con cobertura y la envía a SonarCloud.
    codeql.yml corre en paralelo (push, PR, y cron semanal) y sube CodeQL a Security.
 3. Si build-test + quality-gate-sonar + fluid-attacks-equivalent pasan, y el
-   evento fue push directo a main (no PR), publish-ghcr construye la imagen
-   Docker, la sube a ghcr.io con dos tags (el SHA del commit y `latest`), y
-   la firma con **cosign** en modo keyless (Sigstore OIDC) — sin llaves que
-   gestionar ni secrets nuevos.
+   evento fue push directo a main (no PR), publish-jfrog construye la imagen
+   Docker, la sube a **JFrog Artifactory** (`trialsvu54e.jfrog.io/docker-trial`,
+   instancia real desde el 2026-08-27) con dos tags (el SHA del commit y
+   `latest`), y la firma con **cosign** en modo keyless (Sigstore OIDC) — sin
+   llaves que gestionar ni secrets nuevos.
 4. Dependabot corre en paralelo, de forma independiente al push: revisa
    dependencias Python, Docker y GitHub Actions cada semana y abre PRs o
    alertas de seguridad si encuentra algo vulnerable.
@@ -47,7 +48,7 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
 7. Cada job aprobado primero corre `cosign verify` contra la imagen
    solicitada — si no fue firmada por este mismo workflow en `main`, el job
    falla ahí, antes de tocar Swarm. Si la firma es válida, hace `docker pull`
-   desde ghcr.io y ejecuta `stack/deploy.sh <ambiente>`, que llama a
+   desde JFrog Artifactory y ejecuta `stack/deploy.sh <ambiente>`, que llama a
    `docker stack deploy` combinando `stack/base.yml` (config común) con el
    override del ambiente (`stack/dev.yml`, `sit.yml` o `qa.yml`).
 8. Inmediatamente después de cada `docker stack deploy`, el job verifica el
@@ -86,5 +87,5 @@ La app expone `/metrics` en formato Prometheus (vía `prometheus-fastapi-instrum
 ## Qué NO es este repo
 
 - No es una demo de arquitectura de aplicación de negocio.
-- No usa Fluid Attacks ni JFrog Artifactory reales — usa Semgrep y GitHub Container Registry como equivalentes open-source, documentado explícitamente en `README.md` y `docs/ARQUITECTURA.md`, por limitaciones reales de acceso (no por preferencia).
+- No usa Fluid Attacks real — usa Semgrep como equivalente open-source, documentado explícitamente en `README.md` y `docs/ARQUITECTURA.md`, por una limitación real de licenciamiento (no por preferencia). JFrog Artifactory sí es real desde el 2026-08-27.
 - El Swarm es de un solo nodo simulando DMGR1/DMGR2; en un entorno real habría nodos físicos/VMs separados.
