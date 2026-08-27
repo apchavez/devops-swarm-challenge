@@ -93,11 +93,15 @@ flowchart TB
 | DMGR1 / DMGR2 | Dos managers Swarm físicos separados | Un solo nodo Swarm en la misma máquina | Simulación de un solo desarrollador; el patrón `docker stack deploy` es idéntico a un swarm multi-nodo real |
 | Todo lo demás | — | Igual | GitHub Advanced Security, Quality Gate Sonar, GitHub Secrets, self-hosted runner, gate de aprobación por ambiente y flujo DEV→SIT→QA son la implementación real, no una simulación |
 
-## Capas de seguridad agregadas (no estaban en el diagrama original)
+## Capas agregadas (no estaban en el diagrama original)
 
-Estas se descubrieron y cerraron durante una auditoría posterior al mapeo inicial, y refuerzan el pipeline sin cambiar su arquitectura:
+Estas se fueron descubriendo y cerrando en auditorías posteriores al mapeo inicial, y refuerzan el pipeline sin cambiar su arquitectura. Detalle completo de cada una (con fechas y hallazgos reales) en `README.md`:
 
-- Branch protection en `main` (sin force-push, sin borrado, checks de CI requeridos).
+- Branch protection en `main`: sin force-push, sin borrado, checks de CI requeridos, y desde el 2026-08-24 también PR + 1 aprobación obligatoria.
 - Dependabot: alertas de vulnerabilidad + actualizaciones automáticas de seguridad + PRs de versión (pip, github-actions, docker) con cooldown de 7 días.
 - Las 19 referencias `uses: acción@vX` de los workflows pineadas a SHA de commit exacto (mitiga supply-chain attacks tipo repointing de tags, como el caso real de `trivy-action`).
 - Contenedor de la app corriendo como usuario no-root.
+- Smoke test + verificación real del estado de rollout de Swarm tras cada deploy, con rollback automático si falla.
+- Firma de imagen con **cosign** (keyless) en `ci.yml`, verificada con `cosign verify` antes de cada `docker pull` en `deploy.yml`.
+- Retención automática de imágenes en GHCR (`cleanup-ghcr.yml`, semanal).
+- **Observabilidad**: `/metrics` en la app + stack de Prometheus + Grafana desplegado por separado (`stack/monitoring.yml`).

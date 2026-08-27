@@ -14,6 +14,8 @@ Este repositorio **no busca demostrar una aplicación** — el código funcional
 
 4. **Orquestación de contenedores con Docker Swarm**: la imagen se despliega como un `docker stack` distinto por ambiente, con réplicas y puertos diferenciados, simulando el patrón de dos managers Swarm (DMGR1/DMGR2) del diagrama original con un solo nodo físico.
 
+5. **Observabilidad real, no solo un endpoint**: la app expone `/metrics`, y un stack de Prometheus + Grafana desplegado por separado los scrapea y los muestra en un dashboard — verificable con los 3 targets en estado `up` y el datasource ya conectado.
+
 ## Flujo funcional de punta a punta
 
 ```
