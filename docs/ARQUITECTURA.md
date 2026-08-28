@@ -89,7 +89,7 @@ flowchart TB
 | Elemento | reto.png | Este repo | Motivo |
 |---|---|---|---|
 | Fluid Attacks | Herramienta comercial | Semgrep (SAST), sube SARIF real a Security | Fluid Attacks exige contrato con mínimo de 10 "autores" facturables, sin tier gratuito |
-| DMGR1 / DMGR2 | Dos managers Swarm físicos separados | Un solo nodo Swarm en la misma máquina | Simulación de un solo desarrollador; el patrón `docker stack deploy` sí se verificó en un swarm de prueba multi-nodo real (ver README) |
+| DMGR1 / DMGR2 | Dos managers Swarm físicos separados | Un solo nodo Swarm en la misma máquina | El patrón sí se verificó en un swarm de prueba aislado (2 nodos reales, `docker:dind`). Un intento con una segunda máquina física real encontró una limitación arquitectónica de Docker Desktop para Windows (el daemon vive en una VM sin acceso a la IP LAN real) — dos soluciones probadas y descartadas con evidencia (ver README). La solución real exigiría Docker Engine nativo (Linux), fuera de alcance para un reto personal |
 | Todo lo demás | — | Igual | JFrog Artifactory, GitHub Advanced Security, Quality Gate Sonar, GitHub Secrets, self-hosted runner, gate de aprobación por ambiente y flujo DEV→SIT→QA son la implementación real, no una simulación |
 
 ## Capas agregadas (no estaban en el diagrama original)
